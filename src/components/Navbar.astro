@@ -1,0 +1,48 @@
+---
+const links = [
+  { label: "About", href: "/#about" },
+  { label: "Skills", href: "/#skills" },
+  { label: "Experience", href: "/#experience" },
+  { label: "Projects", href: "/projects" },
+  { label: "Contact", href: "/#contact" },
+];
+---
+
+<nav>
+  <a href="/" class="logo">PB</a>
+  <ul>
+    {links.map(l => <li><a href={l.href}>{l.label}</a></li>)}
+  </ul>
+</nav>
+
+<style>
+  nav {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2.5rem;
+    background: rgba(10, 10, 15, 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    z-index: 100;
+  }
+  .logo {
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: #a78bfa;
+  }
+  ul {
+    list-style: none;
+    display: flex;
+    gap: 2rem;
+  }
+  ul a {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    transition: color 0.2s;
+  }
+  ul a:hover { color: #e2e8f0; }
+</style>

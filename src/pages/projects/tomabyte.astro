@@ -1,0 +1,19 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+---
+<Layout title="TomaByte – Prisha Boreddy">
+  <Navbar />
+  <main>
+    <a href="/projects" class="back">← Back to Projects</a>
+    <h1>TomaByte Embedded Project</h1>
+    <p>Coming soon.</p>
+  </main>
+</Layout>
+<style>
+  main { max-width: 900px; margin: 0 auto; padding: 8rem 2rem 4rem; }
+  h1 { font-size: 2rem; font-weight: 700; color: #f8fafc; margin: 1rem 0; }
+  p { color: #64748b; }
+  .back { color: #a78bfa; font-size: 0.9rem; }
+  .back:hover { opacity: 0.7; }
+</style>

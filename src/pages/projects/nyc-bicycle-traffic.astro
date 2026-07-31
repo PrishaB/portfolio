@@ -1,0 +1,411 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+---
+
+<Layout title="NYC Bicycle Traffic – Prisha Boreddy">
+  <Navbar />
+  <main>
+    <a href="/projects" class="back">← Back to Projects</a>
+
+    <div class="hero">
+      <div class="tags">
+        <span class="tag">Python</span>
+        <span class="tag">Scikit-learn</span>
+        <span class="tag">KNN</span>
+        <span class="tag">Data Science</span>
+      </div>
+      <h1>Predictive Modeling of NYC Bicycle Traffic</h1>
+      <p class="desc">Used K-Nearest Neighbors regression and classification to analyze 2016 NYC bridge bicycle counts — finding optimal sensor placement, forecasting traffic from weather, and predicting day of week.</p>
+      <div class="stats">
+        <div class="stat"><span class="stat-val">0.98</span><span class="stat-label">R² Sensor Model</span></div>
+        <div class="stat"><span class="stat-val">0.46</span><span class="stat-label">R² Weather Model</span></div>
+        <div class="stat"><span class="stat-val">4</span><span class="stat-label">Bridges Analyzed</span></div>
+        <div class="stat"><span class="stat-val">214</span><span class="stat-label">Days of Data</span></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="part1">Part 1: Sensor Placement</button>
+      <button class="tab" data-tab="part2">Part 2: Weather Forecast</button>
+      <button class="tab" data-tab="part3">Part 3: Day Prediction</button>
+      <button class="tab" data-tab="code">Code</button>
+    </div>
+
+    <!-- Overview -->
+    <div class="panel active" id="tab-overview">
+      <div class="card">
+        <h2>Project Summary</h2>
+        <p>This project analyzes NYC bicycle traffic data from 2016 across four bridges: Brooklyn, Manhattan, Williamsburg, and Queensboro. Using KNN-based models, it answers three questions:</p>
+        <ol>
+          <li>Which 3 bridges best predict total citywide traffic? (Regression)</li>
+          <li>Can weather data predict total cyclist counts? (Regression)</li>
+          <li>Can bridge counts predict the day of the week? (Classification)</li>
+        </ol>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Dataset</h3>
+          <ul>
+            <li>Source: NYC DOT 2016 bicycle counts</li>
+            <li>214 daily observations (Apr – Oct)</li>
+            <li>Features: date, day, high/low temp, precipitation, per-bridge counts, total</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Approach</h3>
+          <ul>
+            <li>KNN Regressor (k=5) for Parts 1 & 2</li>
+            <li>KNN Classifier (k=3) for Part 3</li>
+            <li>80/20 train-test split, random_state=42</li>
+            <li>Metrics: RMSE, R², accuracy</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part 1 -->
+    <div class="panel" id="tab-part1">
+      <div class="card">
+        <h2>Which 3 bridges best predict total traffic?</h2>
+        <p>All four combinations of 3 bridges were tested as features to predict total daily cyclist count using KNN regression. The goal: find where to place sensors if only 3 bridges can be monitored.</p>
+      </div>
+      <div class="results-grid">
+        <div class="result-card best">
+          <div class="result-label">✓ Best Combo</div>
+          <div class="result-name">Brooklyn + Manhattan + Williamsburg</div>
+          <div class="result-metrics">
+            <span>R² = 0.98</span>
+          </div>
+        </div>
+        <div class="result-card">
+          <div class="result-name">Brooklyn + Manhattan + Queensboro</div>
+        </div>
+        <div class="result-card">
+          <div class="result-name">Brooklyn + Williamsburg + Queensboro</div>
+        </div>
+        <div class="result-card">
+          <div class="result-name">Manhattan + Williamsburg + Queensboro</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Takeaway</h3>
+        <p>The Brooklyn + Manhattan + Williamsburg combination achieved R² = 0.98, meaning 98% of variance in total traffic is explained by just those three bridges. Queensboro Bridge is the least critical sensor location.</p>
+      </div>
+    </div>
+
+    <!-- Part 2 -->
+    <div class="panel" id="tab-part2">
+      <div class="card">
+        <h2>Can weather predict total cyclist counts?</h2>
+        <p>High temperature, low temperature, and precipitation were used as features to predict total daily cyclists using KNN regression (k=5).</p>
+      </div>
+      <div class="two-col">
+        <div class="card highlight">
+          <h3>Results</h3>
+          <div class="big-metric">R² = 0.46</div>
+          <p>Weather explains ~46% of variance in total traffic — meaningful signal, but far weaker than bridge-count features.</p>
+        </div>
+        <div class="card">
+          <h3>Interpretation</h3>
+          <ul>
+            <li>Temperature positively correlates with ridership</li>
+            <li>Precipitation negatively impacts counts</li>
+            <li>Weather alone is insufficient for precise forecasting</li>
+            <li>Other factors (events, seasonality) drive remaining variance</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part 3 -->
+    <div class="panel" id="tab-part3">
+      <div class="card">
+        <h2>Can bridge counts predict the day of the week?</h2>
+        <p>Per-bridge counts were used as features in a KNN classifier (k=3) to predict which day of the week a given observation belongs to.</p>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Average Traffic by Day</h3>
+          <div class="day-bars">
+            <div class="day-bar"><span class="day-label">Mon</span><div class="bar" style="width:85%"></div></div>
+            <div class="day-bar"><span class="day-label">Tue</span><div class="bar" style="width:88%"></div></div>
+            <div class="day-bar"><span class="day-label">Wed</span><div class="bar" style="width:90%"></div></div>
+            <div class="day-bar"><span class="day-label">Thu</span><div class="bar" style="width:87%"></div></div>
+            <div class="day-bar"><span class="day-label">Fri</span><div class="bar" style="width:82%"></div></div>
+            <div class="day-bar"><span class="day-label">Sat</span><div class="bar" style="width:55%"></div></div>
+            <div class="day-bar"><span class="day-label">Sun</span><div class="bar" style="width:50%"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Why it works</h3>
+          <ul>
+            <li>Weekday vs. weekend traffic patterns are distinct</li>
+            <li>Commuter peaks on Mon–Fri inflate weekday counts</li>
+            <li>Saturday/Sunday show lower, more leisure-driven traffic</li>
+            <li>KNN leverages these cluster patterns for classification</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code -->
+    <div class="panel" id="tab-code">
+      <div class="card code-card">
+        <div class="code-header">
+          <span>code.py</span>
+          <button class="copy-btn" id="copyBtn">Copy</button>
+        </div>
+        <pre id="codeBlock"><code>{`import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
+from sklearn import metrics
+from sklearn.model_selection import train_test_split
+
+def get_model(name, params):
+    if name == "KNN":
+        return KNeighborsRegressor(n_neighbors=params)
+
+def get_model_results(model_name, params, train_data, train_labels, test_data, test_labels, num_class):
+    model = get_model(model_name, params)
+    model.fit(train_data, train_labels)
+    test_data_new = model.predict(test_data)
+    mse = metrics.mean_squared_error(test_labels, test_data_new)
+    return mse, model
+
+if __name__ == "__main__":
+    # Load and clean data
+    dataset_2 = pd.read_csv('nyc_bicycle_counts_2016.csv')
+    for col in ['Brooklyn Bridge', 'Manhattan Bridge', 'Queensboro Bridge', 'Williamsburg Bridge', 'Total']:
+        dataset_2[col] = pd.to_numeric(dataset_2[col].replace(',', '', regex=True))
+    dataset_2 = dataset_2.dropna()
+
+    # ── Part 1: Best 3-bridge combo ──────────────────────────────────────────
+    combos = [
+        ['Brooklyn Bridge', 'Manhattan Bridge', 'Williamsburg Bridge'],
+        ['Brooklyn Bridge', 'Manhattan Bridge', 'Queensboro Bridge'],
+        ['Brooklyn Bridge', 'Williamsburg Bridge', 'Queensboro Bridge'],
+        ['Manhattan Bridge', 'Williamsburg Bridge', 'Queensboro Bridge'],
+    ]
+    combo_names = [
+        'Brooklyn + Manhattan + Williamsburg',
+        'Brooklyn + Manhattan + Queensboro',
+        'Brooklyn + Williamsburg + Queensboro',
+        'Manhattan + Williamsburg + Queensboro',
+    ]
+
+    best_rmse = float('inf')
+    best_combo = None
+
+    for i, combo in enumerate(combos):
+        X = dataset_2[combo]
+        y = dataset_2['Total']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        mse, model = get_model_results("KNN", 5, X_train, y_train, X_test, y_test, len(np.unique(y)))
+        rmse = np.sqrt(mse)
+        print(f"RMSE for {combo_names[i]}: {rmse:.2f}")
+        if rmse < best_rmse:
+            best_rmse = rmse
+            best_combo = combo_names[i]
+
+    print(f"\\nBest combo: {best_combo}, RMSE: {best_rmse:.2f}")
+    r2 = metrics.r2_score(y_test, model.predict(X_test))
+    print(f"R²: {r2:.2f}")
+
+    # ── Part 2: Weather forecast ─────────────────────────────────────────────
+    X_forecast = dataset_2[['High Temp', 'Low Temp', 'Precipitation']]
+    y_forecast = dataset_2['Total']
+    X_train, X_test, y_train, y_test = train_test_split(X_forecast, y_forecast, test_size=0.2, random_state=42)
+    mse, model = get_model_results("KNN", 5, X_train, y_train, X_test, y_test, len(np.unique(y_forecast)))
+    r2 = metrics.r2_score(y_test, model.predict(X_test))
+    print(f"\\nWeather R²: {r2:.2f}, RMSE: {np.sqrt(mse):.2f}")
+
+    # ── Part 3: Day of week classification ───────────────────────────────────
+    dataset_2['Day of Week'] = dataset_2['Day']
+    X_day = dataset_2[['Brooklyn Bridge', 'Manhattan Bridge', 'Queensboro Bridge', 'Williamsburg Bridge']]
+    y_day = dataset_2['Day of Week']
+    X_train, X_test, y_train, y_test = train_test_split(X_day, y_day, test_size=0.2, random_state=42)
+    clf = KNeighborsClassifier(n_neighbors=3)
+    clf.fit(X_train, y_train)
+    accuracy = metrics.accuracy_score(y_test, clf.predict(X_test))
+    print(f"Day prediction accuracy: {accuracy * 100:.2f}%")`}</code></pre>
+      </div>
+    </div>
+
+  </main>
+</Layout>
+
+<style>
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 8rem 2rem 4rem;
+  }
+
+  .back {
+    display: inline-block;
+    color: #a78bfa;
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+    transition: opacity 0.2s;
+  }
+  .back:hover { opacity: 0.7; }
+
+  /* Hero */
+  .hero { margin-bottom: 3rem; }
+  .hero h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0.75rem 0;
+    line-height: 1.2;
+  }
+  .desc { color: #94a3b8; font-size: 1rem; max-width: 700px; margin-bottom: 2rem; }
+
+  .tags { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  .tag {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.65rem;
+    background: rgba(167,139,250,0.12);
+    color: #a78bfa;
+    border-radius: 20px;
+    border: 1px solid rgba(167,139,250,0.2);
+  }
+
+  .stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+  .stat { display: flex; flex-direction: column; }
+  .stat-val { font-size: 2rem; font-weight: 700; color: #a78bfa; line-height: 1; }
+  .stat-label { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 0.6rem 1.1rem;
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 0.875rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.2s, border-color 0.2s;
+    font-family: inherit;
+  }
+  .tab:hover { color: #e2e8f0; }
+  .tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .card h2 { font-size: 1.15rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.75rem; }
+  .card h3 { font-size: 0.95rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.75rem; }
+  .card p { color: #94a3b8; font-size: 0.9rem; line-height: 1.7; }
+  .card ol, .card ul { color: #94a3b8; font-size: 0.9rem; padding-left: 1.25rem; line-height: 2; }
+  .card.highlight { border-color: rgba(167,139,250,0.3); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+
+  /* Results grid */
+  .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
+  .result-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .result-card.best { border-color: rgba(167,139,250,0.5); background: rgba(167,139,250,0.08); }
+  .result-label { font-size: 0.75rem; color: #a78bfa; font-weight: 600; margin-bottom: 0.4rem; }
+  .result-name { font-size: 0.9rem; color: #e2e8f0; }
+  .result-metrics { margin-top: 0.5rem; font-size: 0.85rem; color: #a78bfa; font-weight: 600; }
+
+  .big-metric { font-size: 2.5rem; font-weight: 700; color: #a78bfa; margin: 0.5rem 0; }
+
+  /* Day bars */
+  .day-bars { display: flex; flex-direction: column; gap: 0.6rem; }
+  .day-bar { display: flex; align-items: center; gap: 0.75rem; }
+  .day-label { font-size: 0.8rem; color: #64748b; width: 2rem; flex-shrink: 0; }
+  .bar { height: 8px; background: linear-gradient(90deg, #a78bfa, #7c3aed); border-radius: 4px; transition: width 0.8s ease; }
+
+  /* Code */
+  .code-card { padding: 0; overflow: hidden; }
+  .code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.25rem;
+    background: rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.85rem;
+    color: #64748b;
+  }
+  .copy-btn {
+    background: rgba(167,139,250,0.15);
+    border: 1px solid rgba(167,139,250,0.3);
+    color: #a78bfa;
+    padding: 0.25rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s;
+  }
+  .copy-btn:hover { background: rgba(167,139,250,0.25); }
+
+  pre {
+    margin: 0;
+    padding: 1.5rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    font-family: 'Cascadia Code', 'Fira Code', 'Source Code Pro', monospace;
+  }
+  code { color: #e2e8f0; }
+
+  @media (max-width: 640px) {
+    .two-col, .results-grid { grid-template-columns: 1fr; }
+    .stats { gap: 1.25rem; }
+  }
+</style>
+
+<script>
+  // Tab switching
+  document.querySelectorAll<HTMLElement>('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab)?.classList.add('active');
+    });
+  });
+
+  // Copy button
+  document.getElementById('copyBtn')?.addEventListener('click', () => {
+    const code = document.getElementById('codeBlock')?.innerText ?? '';
+    navigator.clipboard.writeText(code).then(() => {
+      const btn = document.getElementById('copyBtn');
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+    });
+  });
+</script>

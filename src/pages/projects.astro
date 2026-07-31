@@ -1,0 +1,233 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+
+const projects = [
+  {
+    title: "Syncinary",
+    slug: "syncinary",
+    subtitle: "Group Travel Planning Application",
+    period: "Jan 2026 – Present",
+    tags: ["Flutter", "Firebase", "Vertex AI", "Google Flights API", "Amadeus API"],
+    bullets: [
+      "Architected a full-stack collaborative travel platform in Flutter, integrating Google Flights API, Amadeus Travel API, and Vertex AI for AI-assisted itinerary recommendations.",
+      "Built a Firestore data model spanning users, groups, trips, and itineraries, enabling persistent multi-user state and eliminating data conflicts during concurrent edits.",
+      "Enforced role-based access control via Firebase authentication and Security Rules, closing data-isolation gaps between user accounts.",
+    ],
+  },
+  {
+    title: "TomaByte Embedded Project",
+    slug: "tomabyte",
+    subtitle: "RP2350-Based Interactive System",
+    period: "Oct 2025 – Dec 2025",
+    tags: ["C", "RP2350", "KiCAD", "SPI", "Embedded Systems"],
+    bullets: [
+      "Developed real-time embedded firmware in C, integrating SPI-driven OLED graphics, sensor inputs, hardware timers, and interrupt-driven state management.",
+      "Identified a timing defect from overlapping hardware timer interrupts; redesigned into a single-timer, software-event model, eliminating race conditions and ensuring deterministic execution.",
+      "Designed and validated a custom KiCAD PCB integrating power regulation, clock generation, USB connectivity, and sensor/actuator interfaces.",
+    ],
+  },
+  {
+    title: "Predictive Modeling of NYC Bicycle Traffic",
+    slug: "nyc-bicycle-traffic",
+    subtitle: "ML Regression & Classification",
+    period: "Apr 2025 – May 2025",
+    tags: ["Python", "Scikit-learn", "KNN", "Data Science"],
+    bullets: [
+      "Built KNN-based regression and classification models to analyze NYC bicycle traffic, achieving R² = 0.98 for optimal sensor placement.",
+      "Performed comparative model evaluation using RMSE and accuracy metrics to assess predictive limits of traffic-based feature engineering.",
+    ],
+  },
+  {
+    title: "Find A Pad",
+    slug: "find-a-pad",
+    subtitle: "Location-Aware Mobile Application",
+    period: "Jan 2024 – Sept 2024",
+    tags: ["Flutter", "Firebase", "Google Maps API", "Agile"],
+    bullets: [
+      "Coordinated a 5-person team to develop a Flutter-based mobile app for location-aware feminine care product discovery, integrating Google Maps APIs with Firebase.",
+      "Directed Agile development by reviewing code and coordinating feature delivery cycles to ship a production-ready mobile application.",
+    ],
+  },
+  {
+    title: "Email Spam Filter",
+    slug: "email-spam-filter",
+    subtitle: "Multi-Stage Spam Classifier",
+    period: "Apr 2026 – May 2026",
+    tags: ["Procmail", "Regex", "Python", "pytest"],
+    bullets: [
+      "Built a multi-stage spam classifier in Procmail/regex that correctly sorted 74 test emails across staged rules, validated with a full pytest suite.",
+      "Eliminated rule-overlap failures by re-architecting filter logic into hierarchical, compound-condition rules with enforced execution order.",
+    ],
+  },
+];
+---
+
+<Layout title="Projects – Prisha Boreddy">
+  <Navbar />
+
+  <main>
+    <div class="header">
+      <a href="/" class="back">← Back</a>
+      <h1>Projects</h1>
+      <p>A collection of things I've built across embedded systems, full-stack development, and machine learning.</p>
+    </div>
+
+    <div class="grid">
+      {projects.map(p => (
+        <article class="card">
+          <div class="card-top">
+            <div>
+              <h2>{p.title}</h2>
+              <p class="subtitle">{p.subtitle}</p>
+            </div>
+            <span class="period">{p.period}</span>
+          </div>
+          <div class="tags">
+            {p.tags.map(t => <span class="tag">{t}</span>)}
+          </div>
+          <ul>
+            {p.bullets.map(b => <li>{b}</li>)}
+          </ul>
+          <div class="overlay">
+            <a href={`/projects/${p.slug}`} class="overlay-btn">View Project →</a>
+          </div>
+        </article>
+      ))}
+    </div>
+  </main>
+</Layout>
+
+<style>
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 8rem 2rem 4rem;
+  }
+
+  .header {
+    margin-bottom: 3rem;
+  }
+
+  .back {
+    display: inline-block;
+    color: #a78bfa;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+    transition: opacity 0.2s;
+  }
+  .back:hover { opacity: 0.7; }
+
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 0.75rem;
+  }
+
+  .header p {
+    color: #64748b;
+    font-size: 1rem;
+  }
+
+  .grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 1.75rem;
+    transition: border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .card:hover { border-color: rgba(167,139,250,0.4); }
+  .card:hover .overlay { opacity: 1; }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 10, 15, 0.82);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    border-radius: 14px;
+  }
+
+  .overlay-btn {
+    padding: 0.75rem 1.75rem;
+    background: #a78bfa;
+    color: #0a0a0f;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+  }
+  .overlay-btn:hover { background: #c4b5fd; }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .card h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+
+  .subtitle {
+    color: #a78bfa;
+    font-size: 0.875rem;
+    margin-top: 0.2rem;
+  }
+
+  .period {
+    font-size: 0.8rem;
+    color: #64748b;
+    background: rgba(255,255,255,0.06);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .tag {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.65rem;
+    background: rgba(167,139,250,0.12);
+    color: #a78bfa;
+    border-radius: 20px;
+    border: 1px solid rgba(167,139,250,0.2);
+  }
+
+  ul {
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  li {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+</style>
