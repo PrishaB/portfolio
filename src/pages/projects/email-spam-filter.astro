@@ -1,19 +1,402 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import Navbar from '../../components/Navbar.astro';
+
+const procmailrc = `SHELL=/bin/sh
+PATH=/usr/local/lib/mh:$PATH
+MAILDIR=$HOME/Mail
+LOGFILE=$HOME/Mail/logfile
+SENDMAIL=/usr/sbin/sendmail
+VERBOSE=0
+EOL="\\n"
+LOG="$EOL$EOL$EOL"
+LOG="New message log:$EOL"
+LOG=\`perl GET_MESSAGE_INDEX\`
+LOG="$EOL"
+
+## Recipe_1:
+:0 :
+* ^From.*purdue\\.edu
+* ^Subject.*404
+my404Folder
+
+## Recipe_2:
+:0 :
+* ^Subject.*sports
+/var/mail/ece404b5
+
+## Recipe_3:
+:0 :
+* ^From.*(purdue\\.edu[ ]|purdue\\.edu>)
+!pboredd@purdue.edu
+
+## Recipe_4:
+:0 B
+* < 10000
+* (\\<v.codin\\>|\\<viicodin\\>|...)
+* (\\<vi.gra\\>|\\<v1a[^a-z]gra\\>|...)
+* (\\<cialli.s\\>|\\<cia[^a-z]ii?s\\>|...)
+* (http://|\\<www\\>)
+{
+  LOG="Email Trashed by Recipe_4$EOL"
+  :0 :
+  /dev/null
+}
+
+## Recipe_5:
+:0 HB
+* charset="koi8-r"
+{
+  LOG="Email trashed because it is in Russian$EOL"
+  :0 :
+  /dev/null
+}
+
+## Recipe_6:
+:0 :
+spamFolder`;
+
+const recipes = [
+  {
+    id: 1,
+    title: "Purdue 404 Filter",
+    flag: ":0 :",
+    conditions: ["^From.*purdue\\.edu", "^Subject.*404"],
+    action: "→ my404Folder",
+    actionType: "folder",
+    desc: "Catches emails from any purdue.edu address with '404' in the subject line and files them into a dedicated folder. Useful for filtering course-related 404 error notifications.",
+  },
+  {
+    id: 2,
+    title: "Sports Email Router",
+    flag: ":0 :",
+    conditions: ["^Subject.*sports"],
+    action: "→ /var/mail/ece404b5",
+    actionType: "folder",
+    desc: "Routes any email with 'sports' in the subject to the special ECE404 mailbox, regardless of sender. Demonstrates subject-line-based routing to a specific mail spool file.",
+  },
+  {
+    id: 3,
+    title: "Purdue Domain Forwarder",
+    flag: ":0 :",
+    conditions: ["^From.*(purdue\\.edu[ ]|purdue\\.edu>)"],
+    action: "→ Forward to Purdue webmail",
+    actionType: "forward",
+    desc: "Forwards surviving Purdue-domain emails to the personal Purdue webmail account. Only triggers if the message wasn't already caught by Recipes 1 or 2. The destination is a real webmail address — not the special account — to avoid an infinite forwarding loop.",
+  },
+  {
+    id: 4,
+    title: "Drug Spam Trap",
+    flag: ":0 B",
+    conditions: ["Body < 10,000 bytes", "Drug name obfuscation patterns (valium, vicodin, prozac…)", "Viagra obfuscation patterns", "Cialis / Xanax / meds patterns", "Contains http:// or www"],
+    action: "→ /dev/null (deleted)",
+    actionType: "trash",
+    desc: "The most complex recipe. Matches on the message body (B flag) and requires all four conditions to be true simultaneously. Uses extensive regex obfuscation patterns — leet-speak, spacing tricks, character substitutions — to catch spammers who deliberately misspell drug names to evade naive keyword filters. Only deletes if a URL is also present, reducing false positives.",
+  },
+  {
+    id: 5,
+    title: "Russian Charset Filter",
+    flag: ":0 HB",
+    conditions: ['charset="koi8-r"'],
+    action: "→ /dev/null (deleted)",
+    actionType: "trash",
+    desc: "Scans both headers (H) and body (B) for the KOI8-R charset declaration, which indicates Russian-encoded email. Since no Russian correspondence was expected, all such messages are silently discarded.",
+  },
+  {
+    id: 6,
+    title: "Catch-All Spam Folder",
+    flag: ":0 :",
+    conditions: ["(no condition — matches everything remaining)"],
+    action: "→ spamFolder",
+    actionType: "folder",
+    desc: "The final safety net. Any email that survived all previous recipes without being forwarded or deleted lands here. Acts as a quarantine folder for review rather than silently deleting unknown mail.",
+  },
+];
 ---
+
 <Layout title="Email Spam Filter – Prisha Boreddy">
   <Navbar />
   <main>
     <a href="/portfolio/projects" class="back">← Back to Projects</a>
-    <h1>Email Spam Filter</h1>
-    <p>Coming soon.</p>
+
+    <div class="hero">
+      <div class="tags">
+        <span class="tag">Procmail</span>
+        <span class="tag">Regex</span>
+        <span class="tag">Unix</span>
+        <span class="tag">Email Filtering</span>
+        <span class="tag">Shell</span>
+      </div>
+      <h1>Email Spam Filter</h1>
+      <p class="desc">A procmail-based email filtering pipeline that routes, forwards, and discards messages using layered regex recipes — including an obfuscation-aware drug spam trap and charset-based language filtering.</p>
+      <div class="stats">
+        <div class="stat"><span class="stat-val">6</span><span class="stat-label">Recipes</span></div>
+        <div class="stat"><span class="stat-val">3</span><span class="stat-label">Discard Rules</span></div>
+        <div class="stat"><span class="stat-val">100+</span><span class="stat-label">Regex Patterns</span></div>
+        <div class="stat"><span class="stat-val">KOI8-R</span><span class="stat-label">Charset Detection</span></div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-target="overview">Overview</button>
+      <button class="tab-btn" data-target="recipes">Recipes</button>
+      <button class="tab-btn" data-target="code">Full Config</button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div id="overview" class="tab-panel active">
+      <div class="card">
+        <h2>What is this project?</h2>
+        <p>This project implements a multi-stage email spam filter using <strong>procmail</strong>, a Unix mail processing agent. Incoming messages pass through a sequence of recipes — each one testing headers or body content against regex patterns. The first matching recipe wins, so recipe order is critical.</p>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>How Procmail Works</h3>
+          <ul>
+            <li>Recipes are evaluated top-to-bottom; first match wins</li>
+            <li>Flags control what is scanned: <code>H</code> = headers, <code>B</code> = body</li>
+            <li>Conditions are POSIX extended regex matched line-by-line</li>
+            <li>Actions can be a mailbox path, a forward address, or a shell command</li>
+            <li>Locking flag <code>:</code> prevents concurrent writes to the same mailbox</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Filter Pipeline</h3>
+          <ul>
+            <li>Recipe 1 — File Purdue 404 emails to folder</li>
+            <li>Recipe 2 — Route sports emails to special account</li>
+            <li>Recipe 3 — Forward remaining Purdue mail to webmail</li>
+            <li>Recipe 4 — Delete drug spam with URL (body scan)</li>
+            <li>Recipe 5 — Delete Russian-charset email</li>
+            <li>Recipe 6 — Quarantine everything else</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <h3>The Obfuscation Problem</h3>
+        <p>Spammers deliberately misspell drug names — <em>v1agra</em>, <em>vi@gra</em>, <em>v i a g r a</em>, <em>c1alis</em> — to defeat simple keyword filters. Recipe 4 counters this with over 100 regex alternations covering leet-speak substitutions, inserted spaces, character swaps, and Unicode lookalikes. The rule only fires when drug patterns, Viagra patterns, Cialis/Xanax patterns, <em>and</em> a URL all appear together, keeping false positives low.</p>
+      </div>
+      <div class="card">
+        <h3>Logging</h3>
+        <p>The config initialises a <code>LOGFILE</code> at <code>$HOME/Mail/logfile</code> and calls a Perl script (<code>GET_MESSAGE_INDEX</code>) to stamp each processed message. Recipes 4 and 5 append a reason string to the log before discarding, making it easy to audit what was deleted and why.</p>
+      </div>
+    </div>
+
+    <!-- RECIPES -->
+    <div id="recipes" class="tab-panel">
+      <div class="card">
+        <h2>Recipe Breakdown</h2>
+        <p>Each recipe is evaluated in order. Click a recipe to expand its details.</p>
+      </div>
+      <div class="recipes-list">
+        {recipes.map(r => (
+          <div class="recipe-card">
+            <div class="recipe-header">
+              <div class="recipe-num">Recipe {r.id}</div>
+              <div class="recipe-title">{r.title}</div>
+              <div class={`recipe-action-badge ${r.actionType}`}>{r.actionType === 'trash' ? '🗑 Delete' : r.actionType === 'forward' ? '↗ Forward' : '📁 File'}</div>
+            </div>
+            <div class="recipe-body">
+              <div class="recipe-meta">
+                <span class="meta-label">Flag</span>
+                <code class="meta-val">{r.flag}</code>
+              </div>
+              <div class="recipe-conditions">
+                <span class="meta-label">Conditions</span>
+                <ul>
+                  {r.conditions.map(c => <li><code>{c}</code></li>)}
+                </ul>
+              </div>
+              <div class="recipe-meta">
+                <span class="meta-label">Action</span>
+                <code class="meta-val">{r.action}</code>
+              </div>
+              <p class="recipe-desc">{r.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <!-- CODE -->
+    <div id="code" class="tab-panel">
+      <div class="card">
+        <h2>Full .procmailrc</h2>
+        <p>The complete procmail configuration file as deployed.</p>
+      </div>
+      <div class="code-card">
+        <div class="code-header"><span>.procmailrc</span><button class="copy-btn">Copy</button></div>
+        <pre><code set:text={procmailrc} /></pre>
+      </div>
+    </div>
+
   </main>
 </Layout>
+
 <style>
-  main { max-width: 900px; margin: 0 auto; padding: 8rem 2rem 4rem; }
-  h1 { font-size: 2rem; font-weight: 700; color: #f8fafc; margin: 1rem 0; }
-  p { color: #64748b; }
-  .back { color: #a78bfa; font-size: 0.9rem; }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 8rem 2rem 4rem;
+  }
+  .back {
+    display: inline-block;
+    color: #a78bfa;
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+    transition: opacity 0.2s;
+  }
   .back:hover { opacity: 0.7; }
+
+  .hero { margin-bottom: 3rem; }
+  h1 { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 700; color: #f8fafc; margin: 0.75rem 0; }
+  .desc { color: #94a3b8; font-size: 1rem; max-width: 700px; margin-bottom: 2rem; line-height: 1.7; }
+
+  .tags { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  .tag {
+    font-size: 0.75rem; padding: 0.2rem 0.65rem;
+    background: rgba(167,139,250,0.12); color: #a78bfa;
+    border-radius: 20px; border: 1px solid rgba(167,139,250,0.2);
+  }
+  .stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+  .stat { display: flex; flex-direction: column; }
+  .stat-val { font-size: 2rem; font-weight: 700; color: #a78bfa; line-height: 1; }
+  .stat-label { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+
+  .tab-bar {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 2rem;
+  }
+  .tab-btn {
+    padding: 0.6rem 1.1rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    color: #64748b;
+    font-size: 0.875rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab-btn:hover { color: #e2e8f0; }
+  .tab-btn.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .card h2 { font-size: 1.15rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.75rem; }
+  .card h3 { font-size: 0.95rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.75rem; }
+  .card p { color: #94a3b8; font-size: 0.9rem; line-height: 1.7; }
+  .card ul { color: #94a3b8; font-size: 0.9rem; padding-left: 1.25rem; line-height: 2; margin: 0; }
+  .card strong { color: #cbd5e1; }
+  .card em { color: #a78bfa; font-style: normal; }
+  .card code { font-family: monospace; font-size: 0.85em; color: #a78bfa; background: rgba(167,139,250,0.1); padding: 0.1em 0.35em; border-radius: 4px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+
+  /* Recipes */
+  .recipes-list { display: flex; flex-direction: column; gap: 1rem; }
+  .recipe-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .recipe-card:hover { border-color: rgba(167,139,250,0.3); }
+  .recipe-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .recipe-num {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #a78bfa;
+    font-family: monospace;
+    white-space: nowrap;
+  }
+  .recipe-title { font-size: 0.95rem; font-weight: 600; color: #e2e8f0; flex: 1; }
+  .recipe-action-badge {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .recipe-action-badge.folder { background: rgba(99,179,237,0.12); color: #63b3ed; border: 1px solid rgba(99,179,237,0.2); }
+  .recipe-action-badge.forward { background: rgba(104,211,145,0.12); color: #68d391; border: 1px solid rgba(104,211,145,0.2); }
+  .recipe-action-badge.trash { background: rgba(252,129,129,0.12); color: #fc8181; border: 1px solid rgba(252,129,129,0.2); }
+
+  .recipe-body { padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .recipe-meta { display: flex; align-items: baseline; gap: 0.75rem; }
+  .meta-label { font-size: 0.75rem; color: #475569; min-width: 80px; }
+  .meta-val { font-family: monospace; font-size: 0.82rem; color: #a78bfa; background: rgba(167,139,250,0.08); padding: 0.15em 0.5em; border-radius: 4px; }
+  .recipe-conditions { display: flex; gap: 0.75rem; }
+  .recipe-conditions ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+  .recipe-conditions li code { font-family: monospace; font-size: 0.8rem; color: #94a3b8; background: rgba(255,255,255,0.05); padding: 0.15em 0.5em; border-radius: 4px; }
+  .recipe-desc { font-size: 0.875rem; color: #64748b; line-height: 1.7; margin: 0; }
+
+  /* Code */
+  .code-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .code-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.75rem 1.25rem;
+    background: rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.85rem; color: #64748b; font-family: monospace;
+  }
+  .copy-btn {
+    background: rgba(167,139,250,0.15);
+    border: 1px solid rgba(167,139,250,0.3);
+    color: #a78bfa; padding: 0.25rem 0.75rem;
+    border-radius: 6px; font-size: 0.8rem;
+    cursor: pointer; font-family: inherit; transition: background 0.2s;
+  }
+  .copy-btn:hover { background: rgba(167,139,250,0.25); }
+  pre { margin: 0; padding: 1.5rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.7; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+  code { color: #e2e8f0; }
+
+  @media (max-width: 640px) {
+    .two-col { grid-template-columns: 1fr; }
+    .recipe-header { flex-wrap: wrap; }
+  }
 </style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.target;
+      if (target) document.getElementById(target)?.classList.add('active');
+    });
+  });
+
+  document.querySelector<HTMLElement>('.copy-btn')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget as HTMLElement;
+    const code = btn.closest('.code-card')?.querySelector('code')?.textContent ?? '';
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  });
+</script>
