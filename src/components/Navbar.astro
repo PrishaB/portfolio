@@ -1,15 +1,18 @@
 ---
+import { base } from 'astro:config/client';
+
+const b = base ?? '';
 const links = [
-  { label: "About", href: "/#about" },
-  { label: "Skills", href: "/#skills" },
-  { label: "Experience", href: "/#experience" },
-  { label: "Projects", href: "/projects" },
-  { label: "Contact", href: "/#contact" },
+  { label: "About", href: `${b}/#about` },
+  { label: "Skills", href: `${b}/#skills` },
+  { label: "Experience", href: `${b}/#experience` },
+  { label: "Projects", href: `${b}/projects` },
+  { label: "Contact", href: `${b}/#contact` },
 ];
 ---
 
 <nav>
-  <a href="/" class="logo">PB</a>
+  <a href={`${b}/`} class="logo">PB</a>
   <ul>
     {links.map(l => <li><a href={l.href}>{l.label}</a></li>)}
   </ul>
