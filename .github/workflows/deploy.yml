@@ -24,12 +24,10 @@ jobs:
           node-version: 22
       - uses: actions/configure-pages@v4
       - run: npm ci
-        working-directory: visible-visual
       - run: npm run build
-        working-directory: visible-visual
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: visible-visual/dist
+          path: dist
 
   deploy:
     needs: build
