@@ -279,6 +279,14 @@ const states = [
           </ul>
         </div>
       </div>
+      <div class="card poster-card">
+        <h3>Project Poster</h3>
+        <a href="/portfolio/projects/tomabyte-poster.jpg" target="_blank">
+          <img src="/portfolio/projects/tomabyte-poster.jpg" alt="TomaByte project poster" class="poster" />
+        </a>
+        <p class="poster-hint">Click to open full size</p>
+      </div>
+
       <div class="card">
         <h3>The Interrupt Architecture Fix</h3>
         <p>The original design used multiple concurrent hardware timer interrupts — one per subsystem (animation, random events, sounds). These overlapped unpredictably, causing the state machine to miss transitions and the display to render stale frames. The fix was to collapse all timers into a single hardware alarm that fires sequentially, with each callback setting a software flag. The main loop polls these flags and dispatches state changes deterministically, eliminating all race conditions.</p>
@@ -566,6 +574,17 @@ const states = [
     font-family: 'Cascadia Code', 'Fira Code', 'Source Code Pro', monospace;
   }
   code { color: #e2e8f0; }
+
+  .poster-card h3 { margin-bottom: 0.75rem; }
+  .poster {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: opacity 0.2s;
+    cursor: pointer;
+  }
+  .poster:hover { opacity: 0.85; }
+  .poster-hint { font-size: 0.8rem; color: #475569; margin-top: 0.5rem; text-align: center; }
 
   @media (max-width: 640px) {
     .two-col, .arch-grid { grid-template-columns: 1fr; }
