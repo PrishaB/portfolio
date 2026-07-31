@@ -1,19 +1,608 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import Navbar from '../../components/Navbar.astro';
+
+const files = [
+  {
+    name: "main.c",
+    description: "Entry point — initializes all peripherals and runs the main event loop",
+    code: `#include "pico/stdlib.h"
+#include "hardware/spi.h"
+#include "hardware/gpio.h"
+#include "chardisp.h"
+#include "buzzer.h"
+#include "healthbar.h"
+
+// SPI pin definitions for SSD1351 OLED
+const int SPI_OLED_SCK  = 14;
+const int SPI_OLED_MOSI = 11;
+const int SPI_OLED_CSn  = 13;
+const int OLED_DC       = 15;
+
+// Button pins
+const int FEED_BUTTON  = 16; // also START
+const int PET_BUTTON   = 10;
+const int CLEAN_BUTTON = 12;
+
+int health = 100;
+
+int main() {
+    stdio_init_all();
+    init_oled_pins();
+    oled_init();
+    init_feed_button();
+    init_pet_button();
+    buzzer_init();
+    init_sleepy_photoresistor();
+    init_clean_button();
+    healthbar_init_timer();
+
+    // Start animation timer and draw initial screen
+    animation_timer_id = add_alarm_in_ms(500, animation_callback, NULL, true);
+    update_screen();
+
+    while (true) {
+        check_start_game();
+        check_health();
+        check_feed_button();
+        check_pet_button();
+        check_clean_button();
+        check_reset_button();
+        check_death_sound();
+        check_hungry_sound();
+        check_dirty_sound();
+        check_sleepy_sound();
+        check_sad_sound();
+        check_sleep_photoresistor();
+        tight_loop_contents();
+    }
+}`
+  },
+  {
+    name: "chardisp.c",
+    description: "SPI OLED driver, sprite renderer, state machine, and all button/sensor logic",
+    code: `// Pet state machine
+typedef enum {
+    STATE_START_SCREEN,
+    STATE_NORMAL,
+    STATE_HUNGRY,
+    STATE_EATING,
+    STATE_HAPPY,
+    STATE_SAD,
+    STATE_CLEAN,
+    STATE_DIRTY,
+    STATE_SLEEPING,
+    STATE_SLEEPY,
+    STATE_PET,
+    STATE_DEAD
+} PetState;
+
+// SSD1351 OLED init sequence (10 MHz SPI)
+void oled_init() {
+    oled_write_cmd(0xFD); oled_write_data(0x12); // Command lock
+    oled_write_cmd(0xAE);                         // Display off
+    oled_write_cmd(0xB3); oled_write_data(0xF1); // Clock div
+    oled_write_cmd(0xCA); oled_write_data(0x7F); // MUX ratio 128
+    oled_write_cmd(0xA0); oled_write_data(0x74); // RGB remap
+    oled_write_cmd(0xAF);                         // Display ON
+}
+
+// Scale 16x16 sprite to any size on the 128x128 display
+void oled_draw_sprite_scaled(uint8_t x, uint8_t y,
+    const uint16_t *sprite, uint8_t w, uint8_t h, uint8_t scale) {
+    for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+            uint16_t color = sprite[row * w + col];
+            for (int dy = 0; dy < scale; dy++) {
+                for (int dx = 0; dx < scale; dx++) {
+                    uint8_t px = x + col * scale + dx;
+                    uint8_t py = y + row * scale + dy;
+                    oled_set_window(px, py, px, py);
+                    oled_write_cmd(0x5C);
+                    oled_write_data(color >> 8);
+                    oled_write_data(color & 0xFF);
+                }
+            }
+        }
+    }
+}
+
+// Single-timer software-event model (fixes race conditions)
+int64_t animation_callback(alarm_id_t id, void *user_data) {
+    if (pet_state == STATE_START_SCREEN) {
+        startscreen_frame = (startscreen_frame + 1) % 4;
+        draw_start_screen_sprite();
+    } else {
+        walk_toggle    = !walk_toggle;
+        hungry_toggle  = !hungry_toggle;
+        happy_toggle   = !happy_toggle;
+        eating_frame   = (eating_frame + 1) % 4;
+        draw_pet();
+    }
+    return 10000; // reschedule in 10ms
+}
+
+// Random state transitions with health penalties
+int64_t random_timer_callback(alarm_id_t id, void *user_data) {
+    if (pet_state == STATE_NORMAL) {
+        random_seed = random_seed * 1103515245 + 12345;
+        random_seed ^= to_ms_since_boot(get_absolute_time());
+        switch ((random_seed >> 16) % 4) {
+            case 0: pet_state = STATE_HUNGRY; health -= 20; break;
+            case 1: pet_state = STATE_SAD;    health -= 10; break;
+            case 2: pet_state = STATE_DIRTY;  health -= 15; break;
+            case 3: pet_state = STATE_SLEEPY; health -= 5;  break;
+        }
+        if (health <= 0)
+            death_alarm_id = add_alarm_in_ms(1000, death_callback, NULL, false);
+        update_screen();
+    }
+    return 0;
+}`
+  },
+  {
+    name: "buzzer.c",
+    description: "PWM-driven buzzer with distinct sound effects for each pet state",
+    code: `#define BUZZER_PIN 21
+
+void buzzer_play(uint freq, uint time) {
+    uint slice_num = pwm_gpio_to_slice_num(BUZZER_PIN);
+    uint clk_freq  = clock_get_hz(clk_sys);
+    float divider  = 150;
+    uint wrap      = clk_freq / (divider * freq) - 1;
+
+    pwm_set_clkdiv(slice_num, divider);
+    pwm_set_wrap(slice_num, wrap);
+    pwm_set_chan_level(slice_num, pwm_gpio_to_channel(BUZZER_PIN), wrap / 2);
+    pwm_set_enabled(slice_num, true);
+    sleep_ms(time);
+    pwm_set_enabled(slice_num, false);
+}
+
+void chirp_sound()    { buzzer_play(2000,30); sleep_ms(10); buzzer_play(2500,30); }
+void happy_sound()    { buzzer_play(1500,80); sleep_ms(20); buzzer_play(1800,80); sleep_ms(20); buzzer_play(2200,120); }
+void sad_sound()      { for(int i=0;i<8;i++){ buzzer_play(400+(i%2)*100,80); sleep_ms(20); } }
+void fart_sound()     { buzzer_play(200,100); buzzer_play(150,120); buzzer_play(100,150); }
+void sleepy_sound()   { buzzer_play(300,200); sleep_ms(100); buzzer_play(250,250); sleep_ms(150); buzzer_play(200,300); }
+void energized_sound(){ for(int f=1000;f<=2000;f+=200) buzzer_play(f,50); buzzer_play(2000,100); }
+void giggle_sound()   { for(int i=0;i<4;i++){ buzzer_play(1000+i*200,60); sleep_ms(30); } }`
+  },
+  {
+    name: "bitmap.h",
+    description: "Declarations for all 23 16×16 RGB565 pet sprites",
+    code: `#ifndef BITMAP_H
+#define BITMAP_H
+#include <stdint.h>
+
+extern const uint8_t  font6x8[96][6];
+
+// All 23 pet sprite states (16x16 RGB565)
+extern const uint16_t pet_sprite[16*16];
+extern const uint16_t pet_sprite_hungry[16*16];
+extern const uint16_t pet_sprite_hungry2[16*16];
+extern const uint16_t pet_sprite_dead[16*16];
+extern const uint16_t pet_sprite_walk[16*16];
+extern const uint16_t pet_sprite_eating1[16*16];
+extern const uint16_t pet_sprite_eating2[16*16];
+extern const uint16_t pet_sprite_eating3[16*16];
+extern const uint16_t pet_sprite_eating4[16*16];
+extern const uint16_t pet_sprite_sleeping[16*16];
+extern const uint16_t pet_sprite_happy1[16*16];
+extern const uint16_t pet_sprite_happy2[16*16];
+extern const uint16_t pet_sprite_sad[16*16];
+extern const uint16_t pet_sprite_pet1[16*16];
+extern const uint16_t pet_sprite_pet2[16*16];
+extern const uint16_t pet_sprite_clean1[16*16];
+extern const uint16_t pet_sprite_clean2[16*16];
+extern const uint16_t pet_sprite_dirty1[16*16];
+extern const uint16_t pet_sprite_dirty2[16*16];
+extern const uint16_t pet_sprite_sleepy[16*16];
+extern const uint16_t pet_sprite_startscreen_default[16*16];
+extern const uint16_t pet_sprite_startscreen_jump[16*16];
+extern const uint16_t pet_sprite_startscreen_squash[16*16];
+
+#endif`
+  }
+];
+
+const states = [
+  { name: "Normal", emoji: "🚶", desc: "Walking animation, waiting for a need" },
+  { name: "Hungry", emoji: "🍽️", desc: "Bouncing hungry sprite + sound. Feed button resolves." },
+  { name: "Eating", emoji: "😋", desc: "4-frame eating animation cycles through sprites" },
+  { name: "Happy", emoji: "😄", desc: "Skipping animation after a need is met" },
+  { name: "Sad", emoji: "😢", desc: "Sad sprite + sound. Pet button resolves." },
+  { name: "Dirty", emoji: "💩", desc: "Dirty sprite + fart sound. Clean button resolves." },
+  { name: "Sleepy", emoji: "😴", desc: "Sleepy sprite + sound. Photoresistor (darkness) resolves." },
+  { name: "Sleeping", emoji: "💤", desc: "Sleeping sprite shown after photoresistor triggers" },
+  { name: "Pet", emoji: "🤗", desc: "2-frame pet animation when pet button pressed" },
+  { name: "Clean", emoji: "✨", desc: "2-frame clean animation when clean button pressed" },
+  { name: "Dead", emoji: "💀", desc: "Game over screen. Any button resets to start screen." },
+];
 ---
+
 <Layout title="TomaByte – Prisha Boreddy">
   <Navbar />
   <main>
     <a href="/portfolio/projects" class="back">← Back to Projects</a>
-    <h1>TomaByte Embedded Project</h1>
-    <p>Coming soon.</p>
+
+    <div class="hero">
+      <div class="tags">
+        <span class="tag">C</span>
+        <span class="tag">RP2350</span>
+        <span class="tag">Embedded Systems</span>
+        <span class="tag">SPI</span>
+        <span class="tag">KiCAD</span>
+        <span class="tag">PWM</span>
+      </div>
+      <h1>TomaByte</h1>
+      <p class="desc">A Tamagotchi-style virtual pet running on the RP2350 microcontroller — featuring SPI-driven OLED graphics, interrupt-driven state management, PWM audio, and a custom KiCAD PCB.</p>
+      <div class="stats">
+        <div class="stat"><span class="stat-val">11</span><span class="stat-label">Pet States</span></div>
+        <div class="stat"><span class="stat-val">23</span><span class="stat-label">Sprites</span></div>
+        <div class="stat"><span class="stat-val">128×128</span><span class="stat-label">OLED Display</span></div>
+        <div class="stat"><span class="stat-val">10MHz</span><span class="stat-label">SPI Clock</span></div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="states">Pet States</button>
+      <button class="tab" data-tab="architecture">Architecture</button>
+      <button class="tab" data-tab="code">Code</button>
+    </div>
+
+    <!-- Overview -->
+    <div class="panel active" id="tab-overview">
+      <div class="card">
+        <h2>What is TomaByte?</h2>
+        <p>TomaByte is a real-time embedded virtual pet built on the RP2350 microcontroller. The pet has needs — hunger, cleanliness, sadness, sleepiness — that trigger randomly via hardware timers. The player responds using three physical buttons and a photoresistor. Neglect a need long enough and the pet's health drops to zero.</p>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Hardware</h3>
+          <ul>
+            <li>RP2350 microcontroller</li>
+            <li>128×128 RGB OLED (SSD1351) via SPI1 at 10 MHz</li>
+            <li>3 push buttons (feed, pet, clean) with pull-up resistors</li>
+            <li>Photoresistor on ADC for sleep detection</li>
+            <li>PWM buzzer on GPIO 21</li>
+            <li>Custom KiCAD PCB with power regulation & USB</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Key Engineering Challenges</h3>
+          <ul>
+            <li>Eliminated race conditions from overlapping hardware timer interrupts by redesigning into a single-timer, software-event model</li>
+            <li>Implemented a simple PRNG seeded with system uptime for non-repeating state transitions</li>
+            <li>Scaled 16×16 RGB565 sprites to 64×64 pixels in real time over SPI</li>
+            <li>Designed and validated a custom PCB integrating all subsystems</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <h3>The Interrupt Architecture Fix</h3>
+        <p>The original design used multiple concurrent hardware timer interrupts — one per subsystem (animation, random events, sounds). These overlapped unpredictably, causing the state machine to miss transitions and the display to render stale frames. The fix was to collapse all timers into a single hardware alarm that fires sequentially, with each callback setting a software flag. The main loop polls these flags and dispatches state changes deterministically, eliminating all race conditions.</p>
+      </div>
+    </div>
+
+    <!-- States -->
+    <div class="panel" id="tab-states">
+      <div class="card">
+        <h2>Pet State Machine</h2>
+        <p>The pet cycles through 11 states driven by a hardware timer and player input. Each state has a unique sprite, sound, and resolution condition.</p>
+      </div>
+      <div class="states-grid">
+        {states.map(s => (
+          <div class="state-card">
+            <div class="state-emoji">{s.emoji}</div>
+            <div class="state-name">{s.name}</div>
+            <div class="state-desc">{s.desc}</div>
+          </div>
+        ))}
+      </div>
+      <div class="card" style="margin-top:1.25rem">
+        <h3>Health System</h3>
+        <p>Each unresolved need drains health: Hungry −20, Dirty −15, Sad −10, Sleepy −5. Health maxes at 100 and is partially restored when a need is met. Reaching 0 triggers the death state and game over screen.</p>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="panel" id="tab-architecture">
+      <div class="card">
+        <h2>System Architecture</h2>
+        <p>The firmware is split across four modules, each owning a hardware subsystem.</p>
+      </div>
+      <div class="arch-grid">
+        <div class="arch-card">
+          <div class="arch-title">main.c</div>
+          <div class="arch-role">Entry point & event loop</div>
+          <ul>
+            <li>Initializes all peripherals</li>
+            <li>Starts animation alarm</li>
+            <li>Polls all check_ functions</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <div class="arch-title">chardisp.c</div>
+          <div class="arch-role">OLED driver + state machine</div>
+          <ul>
+            <li>SSD1351 SPI init sequence</li>
+            <li>Sprite & text rendering</li>
+            <li>All state transitions</li>
+            <li>Button & photoresistor handlers</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <div class="arch-title">buzzer.c</div>
+          <div class="arch-role">PWM audio engine</div>
+          <ul>
+            <li>Frequency/duration playback</li>
+            <li>8 distinct sound effects</li>
+            <li>Flag-based async triggering</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <div class="arch-title">healthbar.c / bitmap.c</div>
+          <div class="arch-role">UI & assets</div>
+          <ul>
+            <li>Health bar rendering</li>
+            <li>23 RGB565 16×16 sprites</li>
+            <li>6×8 bitmap font</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="margin-top:1.25rem">
+        <h3>SPI Display Pipeline</h3>
+        <p>The RP2350 communicates with the SSD1351 over SPI1 at 10 MHz. Each frame, <code>oled_set_window()</code> defines a pixel region, then raw RGB565 data is written with <code>spi_write_blocking()</code>. Sprites are stored as flat <code>uint16_t</code> arrays and scaled on-the-fly by repeating each pixel <code>scale²</code> times — rendering a 16×16 sprite at 4× gives a 64×64 image with no framebuffer needed.</p>
+      </div>
+    </div>
+
+    <!-- Code -->
+    <div class="panel" id="tab-code">
+      <div class="file-tabs">
+        {files.map((f, i) => (
+          <button class={`file-tab ${i === 0 ? 'active' : ''}`} data-file={i}>{f.name}</button>
+        ))}
+      </div>
+      {files.map((f, i) => (
+        <div class={`file-panel ${i === 0 ? 'active' : ''}`} id={`file-${i}`}>
+          <div class="file-desc">{f.description}</div>
+          <div class="code-card">
+            <div class="code-header">
+              <span>{f.name}</span>
+              <button class="copy-btn" data-index={i}>Copy</button>
+            </div>
+            <pre><code>{f.code}</code></pre>
+          </div>
+        </div>
+      ))}
+    </div>
+
   </main>
 </Layout>
+
 <style>
-  main { max-width: 900px; margin: 0 auto; padding: 8rem 2rem 4rem; }
-  h1 { font-size: 2rem; font-weight: 700; color: #f8fafc; margin: 1rem 0; }
-  p { color: #64748b; }
-  .back { color: #a78bfa; font-size: 0.9rem; }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 8rem 2rem 4rem;
+  }
+
+  .back {
+    display: inline-block;
+    color: #a78bfa;
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+    transition: opacity 0.2s;
+  }
   .back:hover { opacity: 0.7; }
+
+  .hero { margin-bottom: 3rem; }
+  h1 {
+    font-size: clamp(1.8rem, 5vw, 3rem);
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0.75rem 0;
+  }
+  .desc { color: #94a3b8; font-size: 1rem; max-width: 700px; margin-bottom: 2rem; line-height: 1.7; }
+
+  .tags { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  .tag {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.65rem;
+    background: rgba(167,139,250,0.12);
+    color: #a78bfa;
+    border-radius: 20px;
+    border: 1px solid rgba(167,139,250,0.2);
+  }
+
+  .stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+  .stat { display: flex; flex-direction: column; }
+  .stat-val { font-size: 2rem; font-weight: 700; color: #a78bfa; line-height: 1; }
+  .stat-label { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 0.6rem 1.1rem;
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 0.875rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.2s, border-color 0.2s;
+    font-family: inherit;
+  }
+  .tab:hover { color: #e2e8f0; }
+  .tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .card h2 { font-size: 1.15rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.75rem; }
+  .card h3 { font-size: 0.95rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.75rem; }
+  .card p { color: #94a3b8; font-size: 0.9rem; line-height: 1.7; }
+  .card ul { color: #94a3b8; font-size: 0.9rem; padding-left: 1.25rem; line-height: 2; }
+  .card code { font-family: monospace; font-size: 0.85rem; color: #a78bfa; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+
+  /* States */
+  .states-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+  .state-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 1rem;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .state-card:hover { border-color: rgba(167,139,250,0.4); }
+  .state-emoji { font-size: 1.75rem; margin-bottom: 0.4rem; }
+  .state-name { font-size: 0.85rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.3rem; }
+  .state-desc { font-size: 0.75rem; color: #64748b; line-height: 1.4; }
+
+  /* Architecture */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .arch-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .arch-title { font-size: 0.95rem; font-weight: 700; color: #a78bfa; font-family: monospace; margin-bottom: 0.25rem; }
+  .arch-role { font-size: 0.8rem; color: #64748b; margin-bottom: 0.75rem; }
+  .arch-card ul { color: #94a3b8; font-size: 0.85rem; padding-left: 1.1rem; line-height: 1.9; }
+
+  /* File tabs */
+  .file-tabs {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .file-tab {
+    padding: 0.4rem 0.9rem;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: #64748b;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-family: monospace;
+    transition: all 0.2s;
+  }
+  .file-tab:hover { color: #e2e8f0; }
+  .file-tab.active { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); color: #a78bfa; }
+
+  .file-panel { display: none; }
+  .file-panel.active { display: block; }
+
+  .file-desc {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Code */
+  .code-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.25rem;
+    background: rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.85rem;
+    color: #64748b;
+    font-family: monospace;
+  }
+  .copy-btn {
+    background: rgba(167,139,250,0.15);
+    border: 1px solid rgba(167,139,250,0.3);
+    color: #a78bfa;
+    padding: 0.25rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s;
+  }
+  .copy-btn:hover { background: rgba(167,139,250,0.25); }
+  pre {
+    margin: 0;
+    padding: 1.5rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    font-family: 'Cascadia Code', 'Fira Code', 'Source Code Pro', monospace;
+  }
+  code { color: #e2e8f0; }
+
+  @media (max-width: 640px) {
+    .two-col, .arch-grid { grid-template-columns: 1fr; }
+    .states-grid { grid-template-columns: repeat(2, 1fr); }
+  }
 </style>
+
+<script>
+  // Main tabs
+  document.querySelectorAll<HTMLElement>('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab)?.classList.add('active');
+    });
+  });
+
+  // File tabs
+  document.querySelectorAll<HTMLElement>('.file-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.file-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.file-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('file-' + tab.dataset.file)?.classList.add('active');
+    });
+  });
+
+  // Copy buttons
+  document.querySelectorAll<HTMLElement>('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.index;
+      const code = document.querySelector(`#file-${idx} code`)?.textContent ?? '';
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    });
+  });
+</script>
