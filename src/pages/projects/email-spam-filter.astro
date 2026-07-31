@@ -4,33 +4,64 @@ import Navbar from '../../components/Navbar.astro';
 
 const procmailrc = `SHELL=/bin/sh
 PATH=/usr/local/lib/mh:$PATH
+# MAILDIR set to Mail folder and this is the default
 MAILDIR=$HOME/Mail
+DEFAULT=$MAILDIR/
 LOGFILE=$HOME/Mail/logfile
 SENDMAIL=/usr/sbin/sendmail
-VERBOSE=0
-EOL="\\n"
-LOG="$EOL$EOL$EOL"
-LOG="New message log:$EOL"
-LOG=\`perl GET_MESSAGE_INDEX\`
-LOG="$EOL"
+# Ensures log file has detailed logging
+VERBOSE=1
 
-## Recipe_1:
+# Recipe 1: Catches messages with multiple addresses in From: header (junkMail 1-50)
+# :0: ensures a similar message isn't sent to the mailbox.
+# H flag checks header only
+:0 H:
+* ^From:.*@.*,
+recipe1
+
+# Recipe 2: Checks Subject: for spam keywords (junkMail 51-63)
+# I flag ensures case-insensitivity
+# \\bED\\b uses word boundaries to match only a whole word
+# v.?a.?g.?r catches misspellings of viagra
+# bb[a-z]*y catches misspellings of buy
+# impot and imphotgnce catch misspellings of impotence
+:0 HI:
+* ^Subject:.*(\\bED\\b|diploma|degree|college|medications|potency|pills|cheap|guaranteed|bb[a-z]*y|v.?a.?g.?r|impot|imphotgence|Inteveo)
+recipe2
+
+# Recipe 3: Checks body for spam content (junkMail 64-66)
+# Ruby Palace checks for casino spam
+# Sub-Penny and G_GSM check for stock pump-and-dump spam
+:0 BI:
+* (Ruby Palace|Sub-Penny|G_GSM)
+recipe3
+
+# Recipe 4: Compound header+body rule (junkMail 67-74)
+# Both conditions required — neither alone is specific enough
+# Condition 1: multipart/alternative is common in bulk/spam mailers
+# Condition 2: matches any http:// or https:// URL in the body
+:0 HB:
+* ^Content-Type: multipart/alternative
+* https?://
+recipe4
+
+## Instructor Recipe_1:
 :0 :
 * ^From.*purdue\\.edu
 * ^Subject.*404
 my404Folder
 
-## Recipe_2:
+## Instructor Recipe_2:
 :0 :
 * ^Subject.*sports
 /var/mail/ece404b5
 
-## Recipe_3:
+## Instructor Recipe_3:
 :0 :
 * ^From.*(purdue\\.edu[ ]|purdue\\.edu>)
 !pboredd@purdue.edu
 
-## Recipe_4:
+## Instructor Recipe_4 (drug spam trap):
 :0 B
 * < 10000
 * (\\<v.codin\\>|\\<viicodin\\>|...)
@@ -43,7 +74,7 @@ my404Folder
   /dev/null
 }
 
-## Recipe_5:
+## Instructor Recipe_5 (Russian charset):
 :0 HB
 * charset="koi8-r"
 {
@@ -52,64 +83,135 @@ my404Folder
   /dev/null
 }
 
-## Recipe_6:
+# Catch-all: unmatched messages go to uncaught folder
+:0:
+$MAILDIR/uncaught
+
+## Instructor Recipe_6 (unreachable — catch-all above fires first):
 :0 :
 spamFolder`;
 
 const recipes = [
   {
-    id: 1,
+    id: "1",
+    label: "Custom",
+    title: "Multiple Recipients in From:",
+    flag: ":0 H:",
+    conditions: ["^From:.*@.*,"],
+    action: "→ recipe1",
+    actionType: "folder",
+    catches: "junkMail 1–50",
+    desc: "Targets emails where the From: header contains multiple addresses (identified by a comma after an @ symbol). Bulk mailers frequently send to many recipients at once, making this a reliable high-volume spam signal. The H flag restricts matching to headers only, and the locking colon prevents concurrent mailbox writes.",
+  },
+  {
+    id: "2",
+    label: "Custom",
+    title: "Spam Keywords in Subject",
+    flag: ":0 HI:",
+    conditions: [
+      "^Subject:.*(\\bED\\b|diploma|degree|college|medications|potency|pills|cheap|guaranteed|bb[a-z]*y|v.?a.?g.?r|impot|imphotgence|Inteveo)",
+    ],
+    action: "→ recipe2",
+    actionType: "folder",
+    catches: "junkMail 51–63",
+    desc: "Scans the Subject line for a broad set of spam keywords. The I flag makes matching case-insensitive. Obfuscation-aware patterns handle common misspellings: v.?a.?g.?r catches 'v1agra', 'v-a-g-r-a', etc.; bb[a-z]*y catches 'buuy', 'byy'; impot and imphotgence catch misspellings of 'impotence'. \\bED\\b uses word boundaries so it only matches the standalone abbreviation, not words like 'edited'.",
+  },
+  {
+    id: "3",
+    label: "Custom",
+    title: "Body Keyword Scan",
+    flag: ":0 BI:",
+    conditions: ["(Ruby Palace|Sub-Penny|G_GSM)"],
+    action: "→ recipe3",
+    actionType: "folder",
+    catches: "junkMail 64–66",
+    desc: "Scans the message body (B flag) for three specific spam fingerprints: 'Ruby Palace' for online casino spam, and 'Sub-Penny' / 'G_GSM' for stock pump-and-dump schemes. These are narrow enough that a body match alone is sufficient to classify as spam without risking false positives.",
+  },
+  {
+    id: "4",
+    label: "Custom",
+    title: "Multipart + URL Compound Rule",
+    flag: ":0 HB:",
+    conditions: [
+      "^Content-Type: multipart/alternative",
+      "https?://",
+    ],
+    action: "→ recipe4",
+    actionType: "folder",
+    catches: "junkMail 67–74",
+    desc: "Requires both conditions simultaneously. multipart/alternative means the email carries both a plain-text and an HTML version — a hallmark of bulk mailers. The URL condition ensures a link is present in the body. Neither condition alone is specific enough; together they form a reliable compound signal for promotional/spam email.",
+  },
+  {
+    id: "R1",
+    label: "Instructor",
     title: "Purdue 404 Filter",
     flag: ":0 :",
     conditions: ["^From.*purdue\\.edu", "^Subject.*404"],
     action: "→ my404Folder",
     actionType: "folder",
-    desc: "Catches emails from any purdue.edu address with '404' in the subject line and files them into a dedicated folder. Useful for filtering course-related 404 error notifications.",
+    catches: "",
+    desc: "Files emails from any purdue.edu address with '404' in the subject into a dedicated folder.",
   },
   {
-    id: 2,
+    id: "R2",
+    label: "Instructor",
     title: "Sports Email Router",
     flag: ":0 :",
     conditions: ["^Subject.*sports"],
     action: "→ /var/mail/ece404b5",
     actionType: "folder",
-    desc: "Routes any email with 'sports' in the subject to the special ECE404 mailbox, regardless of sender. Demonstrates subject-line-based routing to a specific mail spool file.",
+    catches: "",
+    desc: "Routes any email with 'sports' in the subject to the special ECE404 mailbox.",
   },
   {
-    id: 3,
+    id: "R3",
+    label: "Instructor",
     title: "Purdue Domain Forwarder",
     flag: ":0 :",
     conditions: ["^From.*(purdue\\.edu[ ]|purdue\\.edu>)"],
     action: "→ Forward to Purdue webmail",
     actionType: "forward",
-    desc: "Forwards surviving Purdue-domain emails to the personal Purdue webmail account. Only triggers if the message wasn't already caught by Recipes 1 or 2. The destination is a real webmail address — not the special account — to avoid an infinite forwarding loop.",
+    catches: "",
+    desc: "Forwards surviving Purdue-domain emails to the personal webmail address. Destination is the real webmail account — not the special account — to avoid an infinite forwarding loop.",
   },
   {
-    id: 4,
+    id: "R4",
+    label: "Instructor",
     title: "Drug Spam Trap",
     flag: ":0 B",
-    conditions: ["Body < 10,000 bytes", "Drug name obfuscation patterns (valium, vicodin, prozac…)", "Viagra obfuscation patterns", "Cialis / Xanax / meds patterns", "Contains http:// or www"],
+    conditions: [
+      "Body < 10,000 bytes",
+      "Drug name obfuscation patterns (valium, vicodin, prozac…)",
+      "Viagra obfuscation patterns",
+      "Cialis / Xanax / meds patterns",
+      "Contains http:// or www",
+    ],
     action: "→ /dev/null (deleted)",
     actionType: "trash",
-    desc: "The most complex recipe. Matches on the message body (B flag) and requires all four conditions to be true simultaneously. Uses extensive regex obfuscation patterns — leet-speak, spacing tricks, character substitutions — to catch spammers who deliberately misspell drug names to evade naive keyword filters. Only deletes if a URL is also present, reducing false positives.",
+    catches: "",
+    desc: "Matches on the message body and requires all four conditions simultaneously. Uses 100+ regex alternations covering leet-speak, spacing tricks, and character substitutions to catch obfuscated drug names. Only deletes when a URL is also present, reducing false positives.",
   },
   {
-    id: 5,
+    id: "R5",
+    label: "Instructor",
     title: "Russian Charset Filter",
     flag: ":0 HB",
     conditions: ['charset="koi8-r"'],
     action: "→ /dev/null (deleted)",
     actionType: "trash",
-    desc: "Scans both headers (H) and body (B) for the KOI8-R charset declaration, which indicates Russian-encoded email. Since no Russian correspondence was expected, all such messages are silently discarded.",
+    catches: "",
+    desc: "Scans headers and body for the KOI8-R charset declaration, indicating Russian-encoded email. All such messages are silently discarded.",
   },
   {
-    id: 6,
-    title: "Catch-All Spam Folder",
-    flag: ":0 :",
+    id: "CA",
+    label: "Catch-All",
+    title: "Uncaught Folder",
+    flag: ":0:",
     conditions: ["(no condition — matches everything remaining)"],
-    action: "→ spamFolder",
+    action: "→ $MAILDIR/uncaught",
     actionType: "folder",
-    desc: "The final safety net. Any email that survived all previous recipes without being forwarded or deleted lands here. Acts as a quarantine folder for review rather than silently deleting unknown mail.",
+    catches: "",
+    desc: "Quarantines any email that survived all previous recipes. Stores unmatched mail in the uncaught folder for manual review rather than silently deleting it. Note: this makes the instructor's Recipe_6 (spamFolder) unreachable.",
   },
 ];
 ---
@@ -128,12 +230,12 @@ const recipes = [
         <span class="tag">Shell</span>
       </div>
       <h1>Email Spam Filter</h1>
-      <p class="desc">A procmail-based email filtering pipeline that routes, forwards, and discards messages using layered regex recipes — including an obfuscation-aware drug spam trap and charset-based language filtering.</p>
+      <p class="desc">A procmail-based email filtering pipeline with 4 custom spam recipes layered on top of instructor-provided rules — routing, quarantining, and discarding messages using compound regex conditions across headers and body content.</p>
       <div class="stats">
-        <div class="stat"><span class="stat-val">6</span><span class="stat-label">Recipes</span></div>
-        <div class="stat"><span class="stat-val">3</span><span class="stat-label">Discard Rules</span></div>
-        <div class="stat"><span class="stat-val">100+</span><span class="stat-label">Regex Patterns</span></div>
-        <div class="stat"><span class="stat-val">KOI8-R</span><span class="stat-label">Charset Detection</span></div>
+        <div class="stat"><span class="stat-val">4</span><span class="stat-label">Custom Recipes</span></div>
+        <div class="stat"><span class="stat-val">74</span><span class="stat-label">Emails Caught</span></div>
+        <div class="stat"><span class="stat-val">HBI</span><span class="stat-label">Flag Combinations</span></div>
+        <div class="stat"><span class="stat-val">VERBOSE=1</span><span class="stat-label">Full Logging</span></div>
       </div>
     </div>
 
@@ -147,54 +249,59 @@ const recipes = [
     <div id="overview" class="tab-panel active">
       <div class="card">
         <h2>What is this project?</h2>
-        <p>This project implements a multi-stage email spam filter using <strong>procmail</strong>, a Unix mail processing agent. Incoming messages pass through a sequence of recipes — each one testing headers or body content against regex patterns. The first matching recipe wins, so recipe order is critical.</p>
+        <p>This project implements a multi-stage email spam filter using <strong>procmail</strong>, a Unix mail processing agent. Incoming messages pass through a sequence of recipes top-to-bottom — the first matching recipe wins, so order is critical. Four custom recipes were written to correctly classify 74 test spam emails, layered before a set of instructor-provided rules.</p>
       </div>
       <div class="two-col">
         <div class="card">
-          <h3>How Procmail Works</h3>
+          <h3>Procmail Flags Used</h3>
           <ul>
-            <li>Recipes are evaluated top-to-bottom; first match wins</li>
-            <li>Flags control what is scanned: <code>H</code> = headers, <code>B</code> = body</li>
-            <li>Conditions are POSIX extended regex matched line-by-line</li>
-            <li>Actions can be a mailbox path, a forward address, or a shell command</li>
-            <li>Locking flag <code>:</code> prevents concurrent writes to the same mailbox</li>
+            <li><code>H</code> — match against headers only</li>
+            <li><code>B</code> — match against body only</li>
+            <li><code>HB</code> — match against both headers and body</li>
+            <li><code>I</code> — case-insensitive matching</li>
+            <li><code>:</code> (locking) — prevent concurrent mailbox writes</li>
+            <li>Multiple conditions on a recipe are ANDed together</li>
           </ul>
         </div>
         <div class="card">
           <h3>Filter Pipeline</h3>
           <ul>
-            <li>Recipe 1 — File Purdue 404 emails to folder</li>
-            <li>Recipe 2 — Route sports emails to special account</li>
-            <li>Recipe 3 — Forward remaining Purdue mail to webmail</li>
-            <li>Recipe 4 — Delete drug spam with URL (body scan)</li>
-            <li>Recipe 5 — Delete Russian-charset email</li>
-            <li>Recipe 6 — Quarantine everything else</li>
+            <li>Recipe 1 — Multiple From: addresses → recipe1</li>
+            <li>Recipe 2 — Spam subject keywords → recipe2</li>
+            <li>Recipe 3 — Body casino/stock keywords → recipe3</li>
+            <li>Recipe 4 — Multipart + URL compound → recipe4</li>
+            <li>Instructor rules — Purdue routing, drug/Russian spam deletion</li>
+            <li>Catch-all — Remaining mail → uncaught folder</li>
           </ul>
         </div>
       </div>
       <div class="card">
-        <h3>The Obfuscation Problem</h3>
-        <p>Spammers deliberately misspell drug names — <em>v1agra</em>, <em>vi@gra</em>, <em>v i a g r a</em>, <em>c1alis</em> — to defeat simple keyword filters. Recipe 4 counters this with over 100 regex alternations covering leet-speak substitutions, inserted spaces, character swaps, and Unicode lookalikes. The rule only fires when drug patterns, Viagra patterns, Cialis/Xanax patterns, <em>and</em> a URL all appear together, keeping false positives low.</p>
+        <h3>Design Decisions</h3>
+        <p>Each custom recipe targets a distinct spam category to avoid overlap. Recipe 1 catches bulk sends by header structure alone — no content analysis needed. Recipe 2 uses case-insensitive subject scanning with obfuscation-aware patterns so misspelled keywords still match. Recipe 3 uses narrow body fingerprints (specific brand names) that are precise enough to act on alone. Recipe 4 combines two individually weak signals — multipart format and URL presence — into a compound rule that's strong together.</p>
       </div>
       <div class="card">
         <h3>Logging</h3>
-        <p>The config initialises a <code>LOGFILE</code> at <code>$HOME/Mail/logfile</code> and calls a Perl script (<code>GET_MESSAGE_INDEX</code>) to stamp each processed message. Recipes 4 and 5 append a reason string to the log before discarding, making it easy to audit what was deleted and why.</p>
+        <p>VERBOSE is set to 1, enabling detailed per-recipe logging to <code>$HOME/Mail/logfile</code>. The instructor's drug and Russian-charset recipes append a reason string before discarding. This makes it straightforward to audit exactly which recipe matched each message.</p>
       </div>
     </div>
 
     <!-- RECIPES -->
     <div id="recipes" class="tab-panel">
       <div class="card">
-        <h2>Recipe Breakdown</h2>
-        <p>Each recipe is evaluated in order. Click a recipe to expand its details.</p>
+        <h2>All Recipes</h2>
+        <p>10 recipes total — 4 custom, 5 instructor-provided, and 1 catch-all. Evaluated strictly top-to-bottom.</p>
       </div>
       <div class="recipes-list">
         {recipes.map(r => (
           <div class="recipe-card">
             <div class="recipe-header">
               <div class="recipe-num">Recipe {r.id}</div>
+              <div class={`recipe-label-badge ${r.label.toLowerCase()}`}>{r.label}</div>
               <div class="recipe-title">{r.title}</div>
-              <div class={`recipe-action-badge ${r.actionType}`}>{r.actionType === 'trash' ? '🗑 Delete' : r.actionType === 'forward' ? '↗ Forward' : '📁 File'}</div>
+              {r.catches && <div class="catches-badge">{r.catches}</div>}
+              <div class={`recipe-action-badge ${r.actionType}`}>
+                {r.actionType === 'trash' ? '🗑 Delete' : r.actionType === 'forward' ? '↗ Forward' : '📁 File'}
+              </div>
             </div>
             <div class="recipe-body">
               <div class="recipe-meta">
@@ -222,7 +329,7 @@ const recipes = [
     <div id="code" class="tab-panel">
       <div class="card">
         <h2>Full .procmailrc</h2>
-        <p>The complete procmail configuration file as deployed.</p>
+        <p>The complete procmail configuration file as deployed. Long regex alternations in the instructor drug-spam recipe are abbreviated for readability.</p>
       </div>
       <div class="code-card">
         <div class="code-header"><span>.procmailrc</span><button class="copy-btn">Copy</button></div>
@@ -299,7 +406,6 @@ const recipes = [
   .card p { color: #94a3b8; font-size: 0.9rem; line-height: 1.7; }
   .card ul { color: #94a3b8; font-size: 0.9rem; padding-left: 1.25rem; line-height: 2; margin: 0; }
   .card strong { color: #cbd5e1; }
-  .card em { color: #a78bfa; font-style: normal; }
   .card code { font-family: monospace; font-size: 0.85em; color: #a78bfa; background: rgba(167,139,250,0.1); padding: 0.1em 0.35em; border-radius: 4px; }
 
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
@@ -317,24 +423,32 @@ const recipes = [
   .recipe-header {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
     padding: 1rem 1.5rem;
     background: rgba(255,255,255,0.03);
     border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-wrap: wrap;
   }
-  .recipe-num {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #a78bfa;
-    font-family: monospace;
-    white-space: nowrap;
-  }
+  .recipe-num { font-size: 0.75rem; font-weight: 700; color: #a78bfa; font-family: monospace; white-space: nowrap; }
   .recipe-title { font-size: 0.95rem; font-weight: 600; color: #e2e8f0; flex: 1; }
+
+  .recipe-label-badge {
+    font-size: 0.7rem; padding: 0.15rem 0.55rem;
+    border-radius: 20px; white-space: nowrap; font-weight: 600;
+  }
+  .recipe-label-badge.custom { background: rgba(167,139,250,0.15); color: #a78bfa; border: 1px solid rgba(167,139,250,0.3); }
+  .recipe-label-badge.instructor { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+  .recipe-label-badge.catch-all { background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+
+  .catches-badge {
+    font-size: 0.72rem; padding: 0.15rem 0.55rem;
+    background: rgba(104,211,145,0.1); color: #68d391;
+    border: 1px solid rgba(104,211,145,0.2); border-radius: 20px; white-space: nowrap;
+  }
+
   .recipe-action-badge {
-    font-size: 0.75rem;
-    padding: 0.2rem 0.65rem;
-    border-radius: 20px;
-    white-space: nowrap;
+    font-size: 0.75rem; padding: 0.2rem 0.65rem;
+    border-radius: 20px; white-space: nowrap;
   }
   .recipe-action-badge.folder { background: rgba(99,179,237,0.12); color: #63b3ed; border: 1px solid rgba(99,179,237,0.2); }
   .recipe-action-badge.forward { background: rgba(104,211,145,0.12); color: #68d391; border: 1px solid rgba(104,211,145,0.2); }

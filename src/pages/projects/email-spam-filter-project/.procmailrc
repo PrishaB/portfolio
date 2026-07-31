@@ -1,18 +1,47 @@
 SHELL=/bin/sh
 PATH=/usr/local/lib/mh:$PATH
+# MAILDIR set to Mail folder and this is the default
 MAILDIR=$HOME/Mail
+DEFAULT=$MAILDIR/
 LOGFILE=$HOME/Mail/logfile
 SENDMAIL=/usr/sbin/sendmail
-#VERBOSE=1
-VERBOSE=0
-EOL="
-"
-LOG="$EOL$EOL$EOL"
-LOG="New message log:$EOL"
-LOG=`perl GET_MESSAGE_INDEX`
-LOG="$EOL"
+# Ensures log file has detailed logging
+VERBOSE=1
 
+# Recipe 1: Checks and catches any messages that have multiple addresses in the From: header (catches junkMail 1-50)
+# :0: ensures that a similar message isn't sent to the mailbox.
+# H flag checks header only 
+:0 H:
+* ^From:.*@.*,
+recipe1
 
+# Recipe 2: Checks Subject: for keywords that suggest that the message is spam (catches junkMail 51-63)
+# I flag ensures case-insensitivity
+# \bED\b uses word boundaries to match only a whole word
+# v.?a.?g.?r pattern catches when viagara is mispelled in the text
+# bb[a-z]*y does something similar but for buy
+# impot and imphotgnce are for mispellings of impotence  
+:0 HI:
+* ^Subject:.*(\bED\b|diploma|degree|college|medications|potency|pills|cheap|guaranteed|bb[a-z]*y|v.?a.?g.?r|impot|imphotgence|Inteveo)
+recipe2
+
+# Recipe 3: Checks the Body content for spam, body checking is done with B flag (catches junkMail 64-66)
+# The Ruby Palace checks for casino spam
+# Sub-Penny and G_GSM check for stock pump-and-dump spam
+:0 BI:
+* (Ruby Palace|Sub-Penny|G_GSM)
+recipe3
+
+# Recipe 4: Checks header and body for compound rules to catch spam -- HB flag -- (catches junkMail 67-74)
+# Need both checks together to pass since neither is specific enough to actually catch spam (could accidentally flag the wrong thing)
+# Condition 1: multipart/alternative means email has both plaintext and HTML versions which is aa common format for bulk/spam mailers.
+# Condition 2: https?://, this one matches any http:// or https:// URL in the body.
+:0 HB:
+* ^Content-Type: multipart/alternative
+* https?://
+recipe4
+
+## Below are the recipes that were already in the procmailrc file...
 
 ## Recipe_1:
 ##
@@ -20,8 +49,6 @@ LOG="$EOL"
 * ^From.*purdue\.edu
 * ^Subject.*404
 my404Folder
-
-
 
 ## Recipe_2:
 ##
@@ -34,8 +61,6 @@ my404Folder
 :0 :
 * ^Subject.*sports
 /var/mail/ece404b5
-
-
 
 ## Recipe_3:
 ##
@@ -54,8 +79,6 @@ my404Folder
 :0 :
 * ^From.*(purdue\.edu[ ]|purdue\.edu>)
 !pboredd@purdue.edu
-
-
 
 ## Recipe_4:
 ##
@@ -80,8 +103,6 @@ my404Folder
   /dev/null
 }
 
-
-
 ## Recipe_5:
 ##
 ## This is another recipe from your instructor's spam filter
@@ -95,7 +116,9 @@ my404Folder
   /dev/null
 }
 
-
+# This line catches any messages that were not matched by the above recipes and sends them to an uncaught file in the mail directory
+:0:
+$MAILDIR/uncaught
 
 ## Recipe_6:
 ## 
@@ -104,5 +127,3 @@ my404Folder
 ##
 :0 :
 spamFolder
-
-
